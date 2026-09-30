@@ -1,0 +1,16 @@
+{
+  "name": "electron_test",
+  "version": "0.0.1",
+  "description": "Ez egy teszt electron app",
+  "license": "ISC",
+  "author": "fm",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1"
+  }
+}
