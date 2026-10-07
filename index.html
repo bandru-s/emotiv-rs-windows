@@ -16,13 +16,8 @@
   <body>
     <h1 id="title">Hello from Electron renderer!</h1>
     <p>👋</p>
-    <script>
-      let title = document.getElementById("title");
-      let count = 0;
-      setInterval(() => {
-        count++;
-        title.innerText = `Hello from Electron renderer! (edited) ${count}`;
-      }, 1000);  
-    </script>
+
+    <div id="info"></div>
+    <script src="./render.js"></script>
   </body>
 </html>
