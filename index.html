@@ -11,13 +11,16 @@
       http-equiv="X-Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline'"
     />
-    <title>Hello from Electron renderer!</title>
+    <title>EMOTIV EPOC X</title>
   </head>
   <body>
-    <h1 id="title">Hello from Electron renderer!</h1>
-    <p>👋</p>
-
-    <div id="info"></div>
+    <section aria-labelledby="cortex-heading">
+      <h2 id="cortex-heading">EMOTIV Cortex</h2>
+      <button id="cortex-check" type="button">Cortex-kapcsolat ellenőrzése</button>
+      <p id="cortex-status" role="status" aria-live="polite">Még nincs ellenőrizve.</p>
+      <button id="headset-query" type="button">Headset adatainak lekérése</button>
+      <pre id="headset-info" aria-live="polite"></pre>
+    </section>
     <script src="./render.js"></script>
   </body>
 </html>
