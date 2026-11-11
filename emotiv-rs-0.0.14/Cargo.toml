@@ -1,0 +1,173 @@
+[package]
+name          = "emotiv"
+version       = "0.0.14"
+edition       = "2021"
+# webbluetooth (behind `raw`) requires 1.94, so this crate does too.
+rust-version  = "1.94"
+description   = "Async Rust client and TUI for Emotiv EEG headsets: the Cortex API (JSON-RPC over WebSocket), or direct BLE via Web Bluetooth — natively or in the browser"
+keywords      = ["eeg", "bci", "emotiv", "cortex", "neuroscience"]
+categories    = ["science", "api-bindings", "command-line-utilities", "hardware-support", "wasm"]
+license       = "MIT"
+readme         = "README.md"
+repository    = "https://github.com/eugenehp/emotiv-rs"
+homepage      = "https://github.com/eugenehp/emotiv-rs"
+documentation = "https://docs.rs/emotiv"
+# Screenshots are linked from the README by URL rather than shipped; the rest
+# is editor and tooling state.
+exclude       = ["/tui*.png", "/.vscode", "/.gitrub_activity", "/examples/web/dist"]
+
+# docs.rs builds default features only, which would leave `raw` and the
+# simulator undocumented.
+[package.metadata.docs.rs]
+features = ["raw", "simulate", "config-toml"]
+
+[lib]
+name = "emotiv"
+path = "src/lib.rs"
+
+# ── Binary targets ────────────────────────────────────────────────────────────
+
+[[bin]]
+name = "emotiv-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "emotiv-tui"
+path = "src/bin/tui.rs"
+required-features = ["tui"]
+
+[[bin]]
+name = "emotiv-raw"
+path = "src/bin/raw.rs"
+required-features = ["raw"]
+
+# ── Examples (mirror cortex-example scripts) ──────────────────────────────────
+
+[[example]]
+name = "sub_data"
+path = "examples/sub_data.rs"
+
+[[example]]
+name = "client_mode"
+path = "examples/client_mode.rs"
+
+[[example]]
+name = "record"
+path = "examples/record.rs"
+
+[[example]]
+name = "marker"
+path = "examples/marker.rs"
+
+[[example]]
+name = "mental_command_train"
+path = "examples/mental_command_train.rs"
+
+[[example]]
+name = "live_advance"
+path = "examples/live_advance.rs"
+
+[[example]]
+name = "query_records"
+path = "examples/query_records.rs"
+
+[[example]]
+name = "facial_expression_train"
+path = "examples/facial_expression_train.rs"
+
+[[example]]
+name = "simulate"
+path = "examples/simulate.rs"
+required-features = ["simulate"]
+
+[[example]]
+name = "raw_stream"
+path = "examples/raw_stream.rs"
+required-features = ["raw"]
+
+# Browser interface for the `raw` feature (examples/web). A `cdylib` because
+# the artefact a page loads is a `.wasm`; `examples/web/build.sh` builds it
+# and lays out a directory to serve.
+[[example]]
+name              = "web"
+path              = "examples/web/lib.rs"
+crate-type        = ["cdylib"]
+required-features = ["raw"]
+
+# ── Features ──────────────────────────────────────────────────────────────────
+
+[features]
+default  = ["tui"]
+tui      = ["dep:ratatui", "dep:crossterm"]
+simulate = []
+config-toml = ["dep:toml"]
+raw      = ["dep:webbluetooth", "dep:webbluetooth-wasm", "dep:aes", "dep:cipher"]
+
+# ── Core dependencies ─────────────────────────────────────────────────────────
+
+[dependencies]
+# Only `sync` is portable: `mpsc`/`RwLock` need no runtime underneath them.
+# Everything else (the runtime, timers, net) is native-only, below — tokio's
+# timer is not implemented for wasm32-unknown-unknown, and `full` drags in mio,
+# which has no wasm backend at all. `raw::platform` routes spawning and timers
+# per target.
+tokio            = { version = "1", default-features = false, features = ["sync"] }
+serde            = { version = "1", features = ["derive"] }
+serde_json       = "1"
+futures-util     = "0.3"
+log              = "0.4"
+anyhow           = "1"
+thiserror        = "2"
+tracing          = "0.1"
+toml             = { version = "0.9", optional = true }
+# No `v4`: nothing generates UUIDs, and the random generator is what would
+# force a randomness backend to be configured on wasm.
+uuid             = { version = "1" }
+
+# Optional raw device support
+#
+# BLE goes through the Web Bluetooth API. The `uuid` feature lets the `Uuid`
+# constants in `raw::device` be passed straight in.
+#
+# Must stay in lockstep with every other `webbluetooth` requirement in a
+# consuming graph (e.g. alongside muse-rs). Cargo treats 0.0.x releases as
+# mutually incompatible, so a different 0.0.x elsewhere resolves to *two*
+# copies — and `Bluetooth::shared()` memoises into a `OnceLock`, so two copies
+# means two BLE sessions and devices that will not connect.
+webbluetooth = { version = "0.0.4", features = ["uuid"], optional = true }
+aes         = { version = "0.8", optional = true }
+cipher      = { version = "0.4", optional = true }
+
+# ── Native-only dependencies ──────────────────────────────────────────────────
+#
+# Split by target rather than by feature, so a browser build of `raw` gets the
+# right dependency set with no extra flags. The Cortex client (a WebSocket to
+# the local Cortex service), the binaries and the TUI are native by nature.
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio             = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+rustls            = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+env_logger        = "0.11"
+
+# TUI (feature = "tui", on by default). Gated by target as well as by feature:
+# crossterm has no wasm32-unknown-unknown backend, so asking for `tui` on wasm
+# is inert rather than a compile error.
+ratatui   = { version = "0.30.0", features = ["crossterm"], optional = true }
+crossterm = { version = "0.29", optional = true }
+
+# ── Browser-only dependencies ─────────────────────────────────────────────────
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# `exec::spawn` (polls a task on the page's event loop) and the shim's
+# `SET_TIMEOUT` operation stand in for tokio in `raw::platform`. Held at the
+# same 0.0.4 `webbluetooth` itself depends on: a second copy would mean a
+# second task table and pending-request map that nothing drives.
+webbluetooth-wasm = { version = "0.0.4", optional = true }
+
+[patch.crates-io]
+webbluetooth-windows = { path = "vendor/webbluetooth-windows" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

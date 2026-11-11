@@ -2,3 +2,5 @@ node_modules
 package-lock.json
 .env
 /bridge/target/
+/emotiv-rs-0.0.14/target/
+/emotiv-rs-0.0.14/vendor/webbluetooth-windows/target/
