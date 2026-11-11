@@ -1,26 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="hu">
   <head>
     <meta charset="UTF-8" />
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'"
-    />
-    <meta
-      http-equiv="X-Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'"
-    />
-    <title>EMOTIV EPOC X</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EMOTIV EEG élő adatfolyam</title>
+    <style>
+      :root { color-scheme: dark; font-family: "Segoe UI", sans-serif; background: #10161c; color: #e8eef2; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 320px; }
+      main { max-width: 1320px; margin: auto; padding: 28px; }
+      header, .toolbar, .metrics, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      header { margin-bottom: 24px; }
+      h1 { margin: 0; font-size: clamp(24px, 4vw, 36px); }
+      h2 { margin: 0; font-size: 19px; }
+      p { color: #a7b3bd; }
+      .eyebrow { color: #59d5bd; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; }
+      .panel { background: #192129; border: 1px solid #2a3741; border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+      .toolbar { justify-content: flex-start; flex-wrap: wrap; }
+      select, button { min-height: 42px; border-radius: 8px; border: 1px solid #3a4b57; background: #11191f; color: inherit; padding: 0 12px; font: inherit; }
+      select { flex: 1; min-width: 250px; }
+      button { cursor: pointer; background: #214f4a; border-color: #347b70; }
+      button.secondary { background: #27343d; border-color: #3a4b57; }
+      button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
+      #connection-status { min-height: 24px; margin-bottom: 0; }
+      #connection-status[data-state="streaming"] { color: #59d5bd; }
+      #connection-status[data-state="error"] { color: #ff8f87; }
+      .metrics { justify-content: flex-start; flex-wrap: wrap; margin-top: 16px; }
+      .metric { min-width: 150px; background: #11191f; border-radius: 10px; padding: 12px 16px; }
+      .metric small { display: block; color: #9eacb7; margin-bottom: 5px; }
+      .metric strong { font-size: 20px; }
+      .section-heading { margin-bottom: 14px; }
+      .readings { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 10px; }
+      .reading { background: #11191f; border-radius: 9px; padding: 12px; display: grid; gap: 7px; }
+      .reading strong { color: #59d5bd; }
+      .reading span { font-variant-numeric: tabular-nums; }
+      .reading small { color: #a7b3bd; }
+      .quality-bar { display: block; height: 4px; background: #2a3741; border-radius: 4px; overflow: hidden; }
+      .quality-bar::after { content: ""; display: block; height: 100%; width: var(--quality); background: #59d5bd; }
+      .chart-heading { margin-bottom: 12px; }
+      #chart-channel { min-width: 110px; flex: none; }
+      canvas { display: block; width: 100%; height: 240px; background: #11191f; border-radius: 8px; }
+      .note { font-size: 12px; line-height: 1.5; }
+      @media (max-width: 600px) { main { padding: 16px; } header { align-items: flex-start; flex-direction: column; } .panel { padding: 15px; } }
+    </style>
   </head>
   <body>
-    <section aria-labelledby="cortex-heading">
-      <h2 id="cortex-heading">EMOTIV Cortex</h2>
-      <button id="cortex-check" type="button">Cortex-kapcsolat ellenőrzése</button>
-      <p id="cortex-status" role="status" aria-live="polite">Még nincs ellenőrizve.</p>
-      <button id="headset-query" type="button">Headset adatainak lekérése</button>
-      <pre id="headset-info" aria-live="polite"></pre>
-    </section>
+    <main>
+      <header>
+        <div>
+          <div class="eyebrow">Közvetlen Bluetooth-kapcsolat · emotiv-rs 0.0.14</div>
+          <h1>EMOTIV EEG élő adatfolyam</h1>
+        </div>
+      </header>
+      <section class="panel" aria-labelledby="connection-heading">
+        <div class="section-heading">
+          <h2 id="connection-heading">Headset kapcsolat</h2>
+        </div>
+        <div class="toolbar">
+          <button id="scan-button" type="button">Headsetek keresése</button>
+          <select id="device-select" aria-label="Headset kiválasztása"></select>
+          <button id="connect-button" type="button" disabled>Csatlakozás</button>
+          <button id="disconnect-button" class="secondary" type="button" disabled>Leválasztás</button>
+        </div>
+        <p id="connection-status" role="status" aria-live="polite">A Bluetooth-híd indítása...</p>
+        <div class="metrics">
+          <div class="metric"><small>Akkumulátor</small><strong id="battery">—</strong></div>
+          <div class="metric"><small>Összesített jelminőség</small><strong id="signal-quality">—</strong></div>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="readings-heading">
+        <div class="section-heading">
+          <h2 id="readings-heading">Élő EEG-csatornák</h2>
+          <span class="note">µV · csatornánkénti elektróda-minőség</span>
+        </div>
+        <div id="readings" class="readings"></div>
+      </section>
+      <section class="panel" aria-labelledby="chart-heading">
+        <div class="section-heading chart-heading">
+          <h2 id="chart-heading">Jelalak · ±250 µV kijelzési tartomány</h2>
+          <select id="chart-channel" aria-label="Grafikon csatornája"></select>
+        </div>
+        <canvas id="eeg-chart" aria-label="Kiválasztott EEG-csatorna élő jele"></canvas>
+      </section>
+      <p class="note">Az alkalmazás közvetlenül a headset Bluetooth-kapcsolatát használja, EMOTIV Cortex vagy Launcher nélkül. Az EEG-értékek nem orvosi diagnózisra szolgálnak.</p>
+    </main>
     <script src="./render.js"></script>
   </body>
 </html>
